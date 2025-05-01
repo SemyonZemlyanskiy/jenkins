@@ -72,8 +72,6 @@ if __name__ == "__main__":
         
         predictions = best.predict(X_train)
         signature = infer_signature(X_train, predictions)
-        mlflow.sklearn.log_model(best, "model", signature=signature)
-        mlflow.sklearn.save_model(best, path="model1")
         with open("lr_cars.pkl", "wb") as file:
             joblib.dump(lr, file)
 

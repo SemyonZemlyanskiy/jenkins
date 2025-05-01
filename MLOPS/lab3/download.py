@@ -6,6 +6,7 @@ def download_data():
     df.to_csv("cars.csv", index = False)
     return df
 
+
 def clear_data(path2df):
     df = pd.read_csv(path2df)
     

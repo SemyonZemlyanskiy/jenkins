@@ -72,8 +72,7 @@ if __name__ == "__main__":
         
         predictions = best.predict(X_train)
         signature = infer_signature(X_train, predictions)
-        with open("lr_cars.pkl", "wb") as file:
-            joblib.dump(lr, file)
+        mlflow.sklearn.log_model(best, artifact_path="model", signature=signature)
 
     dfruns = mlflow.search_runs()
     path2model = dfruns.sort_values("metrics.r2", ascending=False).iloc[0]['artifact_uri'].replace("file://","") + '/model' #путь до эксперимента с лучшей моделью

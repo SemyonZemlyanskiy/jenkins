@@ -1,53 +1,99 @@
 import pandas as pd
-from sklearn.preprocessing import OrdinalEncoder
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 
 def download_data():
-    df = pd.read_csv('https://raw.githubusercontent.com/dayekb/Basic_ML_Alg/main/cars_moldova_no_dup.csv', delimiter = ',')
-    df.to_csv("cars.csv", index = False)
+    df = pd.read_csv('vehicles_dataset.csv')
     return df
 
+def clear_data(df):
 
-def clear_data(path2df):
-    df = pd.read_csv(path2df)
-    
-    cat_columns = ['Make', 'Model', 'Style', 'Fuel_type', 'Transmission']
-    num_columns = ['Year', 'Distance', 'Engine_capacity(cm3)', 'Price(euro)']
-    
-    question_dist = df[(df.Year <2021) & (df.Distance < 1100)]
-    df = df.drop(question_dist.index)
-    # Анализ и очистка данных
-    # анализ гистограмм
-    question_dist = df[(df.Distance > 1e6)]
-    df = df.drop(question_dist.index)
-    
-    # здравый смысл
-    question_engine = df[df["Engine_capacity(cm3)"] < 200]
-    df = df.drop(question_engine.index)
-    
-    # здравый смысл
-    question_engine = df[df["Engine_capacity(cm3)"] > 5000]
-    df = df.drop(question_engine.index)
-    
-    # здравый смысл
-    question_price = df[(df["Price(euro)"] < 101)]
-    df = df.drop(question_price.index)
-    
-    # анализ гистограмм
-    question_price = df[df["Price(euro)"] > 1e5]
-    df = df.drop(question_price.index)
-    
-    #анализ гистограмм
-    question_year = df[df.Year < 1971]
-    df = df.drop(question_year.index)
-    
-    df = df.reset_index(drop=True)  
-    ordinal = OrdinalEncoder()
-    ordinal.fit(df[cat_columns])
-    Ordinal_encoded = ordinal.transform(df[cat_columns])
-    df_ordinal = pd.DataFrame(Ordinal_encoded, columns=cat_columns)
-    df[cat_columns] = df_ordinal[cat_columns]
+    numerical_cols = ['price', 'year', 'odometer']
+
+    for col in numerical_cols:
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+
+        IQR = Q3 - Q1
+        lower = Q1 - 1.5 * IQR
+        upper = Q3 + 1.5 * IQR
+
+        df = df[(df[col] > lower) & (df[col] < upper)]
+
+    for col in df.columns:
+        if df[col].dtype in ['int64', 'float64']:
+            df[col] = df[col].fillna(df[col].mean())
+        else:
+            df[col] = df[col].fillna(df[col].mode()[0])
+
+    for col in df.columns:
+        
+        vc = df[col].value_counts()
+        if len(vc) > 0:
+            if vc.values[0] / df.shape[0] > 0.9:
+                df = df.drop(col, axis = 1)
+
+    cat_columns = df.select_dtypes(include='object').columns
+
+    for col in cat_columns:
+        freq = df[col].value_counts(normalize=True)
+        rare = freq[freq < 0.05].index
+        df[col] = df[col].apply(lambda x: 'Other' if x in rare or x == 'other' else x)
+
+
+    rename_dict = {}
+    for col in df.columns:
+        rename_dict[col] = col.replace(' ', '_')
+    df.rename(columns=rename_dict, inplace=True)
+
+    df.drop(['id', 'VIN', 'state', 'lat', 'long', 'price_category', 'url', 'region', 'region_url', 'model', 'image_url','description', 'county', 'posting_date'], axis = 1, inplace=True)
+
+    nominal_feats = ['manufacturer', 'fuel', 'type', 'paint_color']
+
+    ohe = OneHotEncoder(sparse_output=False)
+
+    encoded = ohe.fit_transform(df[nominal_feats])
+
+    df[ohe.get_feature_names_out()] = encoded
+
+    df = df.drop(columns=nominal_feats)
+
+    not_nominal_features = ['condition', 'cylinders', 'transmission', 'drive', 'size']
+
+    features_map = {
+        'condition': {
+            'Other': 0,
+            'Good': 1,
+            'excellent': 2
+        },
+        'cylinders': {
+            'Other': 0,
+            '4 cylinders': 1,
+            '6 cylinders': 2,
+            '8 cylinders': 3
+        },
+        'transmission': {
+            'Other': 0,
+            'automatic': 1
+        },
+        'drive': {
+            'fwd': 0,
+            '4wd': 1,
+            'rwd': 1.2
+        },
+        'size': {
+            'full-size': 2,
+            'mid-size': 1,
+            'Other': 0
+        }
+    }
+
+    for col in not_nominal_features:
+        df[f'{col}_encoded'] = df[col].map(features_map[col])
+        df = df.drop(col, axis = 1)
+
+    df = df.dropna()
+
     df.to_csv('df_clear.csv')
-    return True
 
-download_data()
-clear_data("cars.csv")
+df = download_data()
+clear_data(df)

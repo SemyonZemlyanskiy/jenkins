@@ -1,6 +1,6 @@
 
 from os import name
-from sklearn.preprocessing import StandardScaler, PowerTransformer
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import mlflow
@@ -14,12 +14,15 @@ import joblib
 
 def scale_frame(frame):
     df = frame.copy()
-    X,y = df.drop(columns = ['Price(euro)']), df['Price(euro)']
-    scaler = StandardScaler()
-    power_trans = PowerTransformer()
-    X_scale = scaler.fit_transform(X.values)
-    Y_scale = power_trans.fit_transform(y.values.reshape(-1,1))
-    return X_scale, Y_scale, power_trans
+    mms = MinMaxScaler()
+
+    numerical_features = ['price', 'year', 'odometer']
+
+    for num_f in numerical_features:
+        df[f'mms_{num_f}'] = mms.fit_transform(df[[num_f]])
+        df = df.drop(num_f, axis = 1)
+    X,y = df.drop(columns = ['mms_price']), df['mms_price']
+    return X, y, mms
 
 def eval_metrics(actual, pred):
     rmse = np.sqrt(mean_squared_error(actual, pred))
@@ -47,11 +50,11 @@ if __name__ == "__main__":
     with mlflow.start_run():
         lr = SGDRegressor(random_state=42)
         clf = GridSearchCV(lr, params, cv = 3, n_jobs = 4)
-        clf.fit(X_train, y_train.reshape(-1))
+        clf.fit(X_train, y_train)
         best = clf.best_estimator_
         y_pred = best.predict(X_val)
         y_price_pred = power_trans.inverse_transform(y_pred.reshape(-1,1))
-        (rmse, mae, r2)  = eval_metrics(power_trans.inverse_transform(y_val), y_price_pred)
+        (rmse, mae, r2)  = eval_metrics(power_trans.inverse_transform(y_val.to_numpy().reshape(-1, 1)), y_price_pred)
         alpha = best.alpha
         l1_ratio = best.l1_ratio
         penalty = best.penalty
